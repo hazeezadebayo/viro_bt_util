@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4">
+  <BehaviorTree ID="MainTree">
+
+    <!-- Behavior tree that sequentially navigates locations using a queue of locations. -->
+    <Sequence name="main_loop">
+
+      <!-- declare and set any global variables you wanna use within this bt session. -->
+      <SetBlackboard output_key="msg_1" value="this shows how to use a discrete teleop like gcode of some sort." />
+      <SetBlackboard output_key="Foward" value="i;0.5" />
+      <SetBlackboard output_key="Stop" value="k;0.25"/>
+      <SetBlackboard output_key="Backward" value="<;0.5" />
+      <SetBlackboard output_key="Right" value="l;2" />
+      <SetBlackboard output_key="Left" value="j;2" />
+      <SetBlackboard output_key="Goal_a" value="-0.579;-1.341;0.0;1.0" />
+      <SetBlackboard output_key="Goal_b" value="5.214;-1.533;0.0;1.0" />
+      <SetBlackboard output_key="current_pose" value="0.0;0.0;0.0;1.0" />
+
+      <!-- sequence will only visit next child if current child is returns success. -->
+      <Sequence name="terminalop_sequence">
+        <!-- Start Mapping System -->
+        <TerminalOps task_name="mapping" command="while true; do echo 'mapping is going on'; sleep 1; done"/>
+
+        <!-- TeleOp returns running until 'stop' msg is received, then success. with keyboard movement returns success immediately. -->
+        <TeleOp keyboard_drive_key="" manual_drive_topic="/manual_drive"/>
+
+        <!-- Sub Tree sequence for TeleOp actions using keyboard control -->
+        <!-- if you wanted to use the subscription topic. publish same string message as keyboard e.g 'i;1.0' to move forward -->
+        <Sequence name="KeyTeleOpSequence">
+
+          <!-- the content of message one is fetched from the board and passed to the print_message message input. -->
+          <PrintMessage message="{msg_1}"/>
+
+          <!-- Move forward from input key -->
+          <TeleOp keyboard_drive_key="{Foward}" manual_drive_topic=""/>
+
+          <!-- Hard Coded Turn right. Do this 2 times. -->
+          <!-- Recovery Node 'RecoveryNode' must only have 2 children. -->
+          <!-- Recovery Node repeats or retries until success. -->
+          <RecoveryNode number_of_retries="5">
+            <!-- if this returns success then finish. -->
+            <TeleOp keyboard_drive_key="l;0.5" manual_drive_topic=""/>
+            <!-- if the above fails try this too. -->
+            <PrintMessage message="Running recovery action ...failed."/>
+          </RecoveryNode>
+
+        <!-- end sub tree sequence -->
+        </Sequence>
+
+        <!-- Save the Map -->
+        <TerminalOps task_name="save_map" command="while true; do echo 'saving map'; sleep 5; done"/>
+
+        <!-- Wait for 5 seconds -->
+        <Wait wait_seconds="5"/>
+
+        <!-- kill the Save Map process -->
+        <TerminalOps task_name="save_map" command="cntrl c"/>
+
+        <!-- kill the Map process -->
+        <TerminalOps task_name="mapping" command="cntrl c"/>
+
+      <!-- end sub tree sequence -->
+      </Sequence>
+
+
+
+
+      <!-- this ticks all tree leaf nodes once each. if any returns failure, the whole has failed -->
+      <ReactiveSequence>
+
+        <!-- do this first -->
+        <Sequence>
+
+          <!-- ===================== -->
+          <!-- sequence: will only visit next child if current child is returns success. -->
+          <Sequence name="mapchange_sequence">
+
+            <PrintMessage message="<mapchange_sequence>"/>
+
+            <!-- map selection: Sequence for changing map and clearing costmaps -->
+            <MapChange map_filepath="/app/ros2_ws/nav2_ign/Behavior_Tree/viro_bt_util/tree/sim_stations.yaml"/>
+
+            <!-- publish initial pose from odom -->
+            <!-- Initialize pose using odom by default e.g. initial_pose="". or specific coordinates e.g. initial_pose="0.0;0.0;0.0;1.0" -->
+            <InitPose initial_pose="{current_pose}"/>
+
+          <!-- end map change sequence -->
+          </Sequence>
+          <!-- ===================== -->
+
+
+
+          <!-- ===================== -->
+          <!-- sequence will only visit next child if current child is returns success. -->
+          <Sequence name="undock_sequence">
+
+            <PrintMessage message="<undock_sequence>"/>
+
+            <!-- Check if the robot is docked using odom localization. 'amcl' could also be used. if nothing is found, return 0 and failure. -->
+            <IsRobotDocked localization="odom" stations_yaml="/app/ros2_ws/nav2_ign/Behavior_Tree/viro_bt_util/tree/sim_stations.yaml" pose_tolerance="0.5" est_dock_id="{dock_id}"/>
+
+            <!-- Save the dock position -->
+            <!-- <AutoDock service_name="save_dock" dock_id="1"/> -->
+
+            <!-- Undock the robot -->
+            <AutoDock service_name="undock" dock_id="{dock_id}"/>
+
+          <!-- end dock sequence -->
+          </Sequence>
+          <!-- ===================== -->
+
+
+          <!-- if we had cleaning robot with .yaml that contains cleaning coverage path for a defined polygon. -->
+          <!-- assumption: 'polygon selection' has happened and we have .yaml file that contains list of goals  -->
+          <!-- this will overwrite what we have in blackboard memory when we initialized the bt service server -->
+          <SetBlackboard output_key="location_file" value="/app/ros2_ws/nav2_ign/Behavior_Tree/viro_bt_util/tree/sim_locations.yaml" />
+
+          <!-- set locations from yaml into bt blackboard queue. -->
+          <SetLocations name="set_locations" num_locs="{num_locs}" loc_names="{loc_names}" loc_poses="{loc_poses}"/>
+
+          <!-- if we get a failure, check or goto next node -->
+          <Fallback>
+
+
+
+            <!-- ===================== -->
+            <!-- show on screen that we are going to the next event. -->
+            <ForceFailure>
+              <PrintMessage message="<search_location>"/>
+            </ForceFailure>
+            <!-- ===================== -->
+
+
+
+            <!-- ===================== -->
+            <!-- The node <KeepRunningUntilFailure> must have exactly 1 child -->
+            <!-- since failure is returned when no locations to visit -->
+            <!-- since failure is returned when no locations to visit -->
+            <KeepRunningUntilFailure>
+
+              <!-- nav sequence handles/visits one goal at a time. -->
+              <!-- visit all locations until there is none. the nav sequence returns failure if no more goals in list. -->
+              <Sequence                   name="search_location">
+                  <GetLocationFromQueue   name="get_loc"      loc_names="{loc_names}" target_location="{target_location}"/>
+                  <Navigation             name="go_to_loc"    loc_poses="{loc_poses}" loc="{target_location}"/>
+
+                  <!-- Invert the choice of our fallback, here if any fallback child is a success, then we negate it. -->
+                  <!-- this can help kill our while-like KeepRunningUntilFailure loop. else loop keeps looping. right? -->
+                  <Inverter>
+
+                    <!-- fallback returns failure if all children returns failure. and success if any returns success. -->
+                    <!-- will check next child only if the current child returns failure. -->
+                    <Fallback>
+
+                      <!-- Check if the battery is low, we need to cancel current motion and go to charge -->
+                      <IsBatteryLow min_battery="20.0" battery_topic="/battery_status" is_voltage="false"/>
+
+                      <!-- Check if there is an emergency -->
+                      <IsEmergency emergency_topic="/emergency_status"/>
+
+                      <!-- Check if task is interrupted from gui -->
+                      <Interrupt event="cancel"/>
+
+                      <!-- Check if there is an obstacle -->
+                      <isObstacle brake_accel_limit="-10.0" use_scan="true" warning_threshold="0.5"/>
+
+                    <!-- End of Fallback -->
+                    </Fallback>
+
+                  <!-- End of Invertion -->
+                  </Inverter>
+
+              </Sequence>
+              <!-- end nav sequence -->
+
+            <!-- End of while-like KeepRunningUntilFailure loop -->
+            <!-- The node <KeepRunningUntilFailure> must have exactly 1 child -->
+            </KeepRunningUntilFailure>
+            <!-- ===================== -->
+
+
+
+            <!-- ===================== -->
+            <!-- the KeepRunningUntilFailure will keep running until we get a failure. -->
+            <!-- the failure is either due to interruption or no more goals to visit. -->
+            <!-- we need to decide wether to dock or not. -->
+
+            <!-- check if the previous failure had been because of a low battery -->
+            <!-- sequence will only visit next child if current child is returns success. -->
+            <Sequence name="charge_sequence">
+
+              <PrintMessage message="<charge_sequence>"/>
+
+              <!-- Check if the battery is low, we need to cancel current motion and go to charge -->
+              <IsBatteryLow min_battery="20.0" battery_topic="/battery_status" is_voltage="false"/>
+
+              <!-- we dock at charge dock. if we have reached the goal i.e. success returned by pred. child -->
+              <AutoDock service_name="dock" dock_id="2"/>
+
+              <!-- Check if the battery is charging -->
+              <IsBatteryCharging battery_topic="/battery_status"/>
+
+            <!-- end charge sequence -->
+            </Sequence>
+            <!-- ===================== -->
+
+
+
+            <!-- ===================== -->
+            <!-- sequence will only visit next child if current child is returns success. -->
+            <Sequence name="dock_sequence">
+
+              <PrintMessage message="<dock_sequence>"/>
+
+              <!-- Check if the robot curr pose against the curr goal is reached. -->
+              <IsGoalReached goal_reached_tol="0.25"/>
+
+              <!-- Check if the curr goal is a dock in stations. if not, return 0 and failure. -->
+              <IsGoalDock station_file="/app/ros2_ws/nav2_ign/Behavior_Tree/viro_bt_util/tree/sim_stations.yaml" goal_dock_id="{dock_id}"/>
+
+              <!-- we dock the robot. if we have reached the goal i.e. success returned by pred. child -->
+              <AutoDock service_name="dock" dock_id="{dock_id}"/>
+
+            <!-- end dock sequence -->
+            </Sequence>
+            <!-- ===================== -->
+
+
+
+          </Fallback>
+
+        </Sequence>
+        <!-- and do this simultaneously -->
+
+      <!-- End of Reactive Sequence -->
+      </ReactiveSequence>
+
+
+    <!-- end sub tree sequence -->
+    </Sequence>
+
+  <!-- end of main behaviour tree -->
+  </BehaviorTree>
+
+
+
+</root>
