@@ -1,5 +1,4 @@
 # BehaviorTree.ROS2
-[![Test](https://github.com/BehaviorTree/BehaviorTree.ROS2/actions/workflows/test.yml/badge.svg)](https://github.com/BehaviorTree/BehaviorTree.ROS2/actions/workflows/test.yml)
 
 This repository contains useful wrappers to use ROS2 and BehaviorTree.CPP together.
 
@@ -38,23 +37,16 @@ A lot of code is either inspired or copied from [Nav2](https://docs.nav2.org/).
 For this reason, we retain the same license and copyright.
 
 
-## Usage
+# viro_bt_util
+
+ROS2 utility library for Behaviour Tree C++.
+
+Some of the source code here are taken and modified from ros-navigation [monkey-robotics](https://github.com/MonKey-Robotics/monkey_bt_util/tree/main).
+
+## Requirement
 
 $ sudo apt install ros-humble-behaviortree-cpp
 $ sudo apt install ros-humble-navigation2 ros-humble-nav2-bringup
-
-
-
-
-# ----------------------------------------------------------------------- #
-#               AGV CLIENT DatabaseRegistration                           #
-# ----------------------------------------------------------------------- #
-
-
-# viro_bt_util
-ROS2 utility library for Behaviour Tree C++.
-
-Most of the source code here are taken and modified from ros-navigation [navigation2/nav2_behaviour_tree repository](https://github.com/ros-navigation/navigation2/tree/main/nav2_behavior_tree).
 
 ## Demo:
 
@@ -78,52 +70,7 @@ cd ros2_ws/nav2_ign && . /usr/share/gazebo/setup.sh; source /opt/ros/humble/setu
 - Please change the special messages like diffamr blah blah blah in emergency messages
 - or viro_v_dock messages in autodock etc.
 - or odom topic name and the likes.
-
-
-# ----------------------------------------------------------------------- #
-#
-#        IF, START NAVIGATION:
-#                ----L----
-#               0-   x   -0
-#                |       |
-#                |       |
-#               0-       -0
-#                ---------
-# ----------------------------------------------------------------------- #
-
-# USAGE:
-
-# Terminal 1:
-cd docker_ws/env/dev3
-export DISPLAY=:0.0
-xhost +local:docker
-docker compose up --build
-# or
-docker run -it dev3-tailscaled /bin/bash
-
-# -------------- NO MQTT?
-# Terminal 2:
-docker exec -it dev3-tailscaled-1 bash
-cd ros2_ws/nav2_ign && . /usr/share/gazebo/setup.sh; source install/setup.bash; export TURTLEBOT3_MODEL=waffle; ros2 launch viro_simple_fleet fleet_client.launch.py
-
-# Terminal 3:
-docker exec -it dev3-tailscaled-1 bash
-cd ros2_ws/nav2_ign && . /usr/share/gazebo/setup.sh; source install/setup.bash; python3 FleetManager/viro_simple_fleet/scripts/fleet_mngr_main.py
-
-# -------------- MQTT?
-# Terminal 2:
-docker exec -it dev3-tailscaled-1 bash
-cd ros2_ws/nav2_ign && . /usr/share/gazebo/setup.sh; source install/setup.bash; export TURTLEBOT3_MODEL=waffle; ros2 launch vda5050_tb3_adapter connector_tb3.launch.py
-
-# Terminal 3:
-docker exec -it dev3-tailscaled-1 bash
-cd ros2_ws/nav2_ign && . /usr/share/gazebo/setup.sh; source install/setup.bash;
-ros2 topic echo /kullar/v1/OSRF/TB3_1/state
-
-
-
-
-
+- path to files, maps etc.
 
 # EXAMPLE TREE 1:
 
@@ -175,7 +122,7 @@ ros2 topic echo /kullar/v1/OSRF/TB3_1/state
     </Sequence>
 
 # TREE 1 OUTPUT:
-
+```bash
 [INFO] [1737968789.684129520] [demo_bt_server]: //demo_bt_server is ready.
 [INFO] [1737968794.539944987] [demo_bt_server]: Received request, executing tree...
 [set_locations] set locations ticked...
@@ -228,7 +175,7 @@ checking done flag...
 [get_loc] No more locations!
 [INFO] [1737968794.629775500] [demo_bt_server]: Tree execution failed!
 
-
+```
 
 # EXAMPLE TREE 2:
 
@@ -248,6 +195,7 @@ checking done flag...
       </Sequence>
 
 # TREE 2 OUTPUT:
+```bash
 
 [INFO] [1737976610.144436656] [demo_bt_server]: //demo_bt_server is ready.
 [INFO] [1737976617.362485962] [demo_bt_server]: Received request, executing tree...
@@ -267,3 +215,7 @@ Your message here
 [TerminalOps] process stop triggered...
 Process group (PID: 171184) terminated successfully.
 Task stopped successfully: mapping
+
+```
+
+
